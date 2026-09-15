@@ -46,7 +46,7 @@ off Xiaomi or its affiliates' products.
 Number entities for Xiaomi Home.
 """
 from __future__ import annotations
-from typing import Optional
+from typing import Any, Optional
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -54,8 +54,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.number import NumberEntity
 
 from .miot.const import DOMAIN
-from .miot.miot_spec import MIoTSpecProperty
-from .miot.miot_device import MIoTDevice, MIoTPropertyEntity
+from .miot.miot_spec import MIoTSpecAction, MIoTSpecProperty
+from .miot.miot_device import MIoTActionEntity, MIoTDevice, MIoTPropertyEntity
 
 
 async def async_setup_entry(
@@ -71,6 +71,9 @@ async def async_setup_entry(
     for miot_device in device_list:
         for prop in miot_device.prop_list.get('number', []):
             new_entities.append(Number(miot_device=miot_device, spec=prop))
+        for action in miot_device.action_list.get('number', []):
+            new_entities.append(
+                ActionNumber(miot_device=miot_device, spec=action))
 
     if new_entities:
         async_add_entities(new_entities)
@@ -104,3 +107,34 @@ class Number(MIoTPropertyEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
         await self.set_property_async(value=value)
+
+
+class ActionNumber(MIoTActionEntity, NumberEntity):
+    """Number entities backed by a single-argument MIoT action."""
+
+    _in_prop: MIoTSpecProperty
+
+    def __init__(self, miot_device: MIoTDevice, spec: MIoTSpecAction) -> None:
+        """Initialize the ActionNumber."""
+        super().__init__(miot_device=miot_device, spec=spec)
+        self._in_prop = spec.in_[0]
+        self._attr_native_value = None
+        if self._in_prop.value_range:
+            self._attr_native_min_value = self._in_prop.value_range.min_
+            self._attr_native_max_value = self._in_prop.value_range.max_
+            self._attr_native_step = self._in_prop.value_range.step
+            self._attr_native_value = self._in_prop.value_range.min_
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return the last value sent to the action."""
+        return self._attr_native_value
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Execute the action with the given value."""
+        value_out: Any = (
+            int(value) if self._in_prop.format_ == int else value)
+        await self.action_async(
+            in_list=[{'piid': self._in_prop.iid, 'value': value_out}])
+        self._attr_native_value = value
+        self.async_write_ha_state()

@@ -677,7 +677,15 @@ class MIoTDevice:
                     continue
                 if action.name in SPEC_ACTION_TRANS_MAP:
                     continue
-                if action.in_:
+                if (
+                    len(action.in_) == 1
+                    and action.in_[0].format_ in (int, float)
+                    and action.in_[0].value_range
+                ):
+                    # A single ranged numeric argument can be set from a
+                    # dashboard slider, so prefer number over notify.
+                    action.platform = 'number'
+                elif action.in_:
                     action.platform = 'notify'
                 else:
                     action.platform = 'button'
