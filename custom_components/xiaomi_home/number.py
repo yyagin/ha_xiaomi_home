@@ -51,7 +51,7 @@ from typing import Any, Optional
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 
 from .miot.const import DOMAIN
 from .miot.miot_spec import MIoTSpecAction, MIoTSpecProperty
@@ -117,6 +117,9 @@ class ActionNumber(MIoTActionEntity, NumberEntity):
     def __init__(self, miot_device: MIoTDevice, spec: MIoTSpecAction) -> None:
         """Initialize the ActionNumber."""
         super().__init__(miot_device=miot_device, spec=spec)
+        # Box mode: the action fires once on submit, not on every slider
+        # tick while dragging.
+        self._attr_mode = NumberMode.BOX
         self._in_prop = spec.in_[0]
         self._attr_native_value = None
         if self._in_prop.value_range:
